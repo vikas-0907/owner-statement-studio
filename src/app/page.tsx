@@ -49,9 +49,12 @@ interface ColumnMapping {
 
 // Replace these three URLs with your real Lemon Squeezy / Dodo Payments checkout links
 // Set each checkout's Success Redirect URL to: https://yourdomain.com/?unlocked=pro_2026
-const SINGLE_PASS_CHECKOUT_URL = "#checkout-single-9";
-const MONTHLY_PRO_CHECKOUT_URL = "#checkout-monthly-25";
-const ANNUAL_PRO_CHECKOUT_URL = "#checkout-annual-199";
+const SINGLE_PASS_CHECKOUT_URL =
+"https://checkout.dodopayments.com/buy/pdt_0NslK7g8MJ8p387GrWNMZ?quantity=1&redirect_url=https://owner-statement-studio-lyart.vercel.app%2F%3Funlocked%3Dsingle_2026";
+const MONTHLY_PRO_CHECKOUT_URL =
+"https://checkout.dodopayments.com/buy/pdt_0NslKixVcbBaw6p7G144b?quantity=1&redirect_url=https://owner-statement-studio-lyart.vercel.app%2F%3Funlocked%3Dpro_2026";
+const ANNUAL_PRO_CHECKOUT_URL =
+"https://checkout.dodopayments.com/buy/pdt_0NslL4CYAFH6Yxx1QR0AT?quantity=1&redirect_url=https://owner-statement-studio-lyart.vercel.app%2F%3Funlocked%3Dpro_2026";
 
 const SAMPLE_BOOKINGS: BookingRow[] = [
   {
