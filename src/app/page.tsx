@@ -88,37 +88,52 @@ export default function OwnerStatementStudio() {
   const [singleCredits, setSingleCredits] = useState<number>(0);
   const [showPaywallModal, setShowPaywallModal] = useState<boolean>(false);
   const [billingCycle, setBillingCycle] = useState<"annual" | "monthly">("annual");
-  const [printWatermarked, setPrintWatermarked] = useState<boolean>(false);
 
   const hasCleanExportAccess = isUnlimitedPro || singleCredits > 0;
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const unlockedTier = params.get("unlocked");
-    const paymentStatus = params.get("status");
-    const hasValidPayment =
-      paymentStatus === "succeeded" ||
-      paymentStatus === "active" ||
-      params.has("payment_id") ||
-      params.has("subscription_id");
-
-    if (unlockedTier === "pro_2026" && hasValidPayment) {
-      localStorage.setItem("oss_pro_unlocked", "true");
+    if (localStorage.getItem("oss_pro_unlocked") === "true") {
       setIsUnlimitedPro(true);
-      window.history.replaceState({}, "", window.location.pathname);
-    } else if (unlockedTier === "single_2026" && hasValidPayment) {
-      const current = parseInt(localStorage.getItem("oss_single_credits") || "0", 10);
-      const updated = current + 1;
-      localStorage.setItem("oss_single_credits", String(updated));
-      setSingleCredits(updated);
-      window.history.replaceState({}, "", window.location.pathname);
-    } else {
-      if (localStorage.getItem("oss_pro_unlocked") === "true") {
-        setIsUnlimitedPro(true);
-      }
-      const savedCredits = parseInt(localStorage.getItem("oss_single_credits") || "0", 10);
-      if (savedCredits > 0) setSingleCredits(savedCredits);
     }
+    const savedCredits = parseInt(localStorage.getItem("oss_single_credits") || "0", 10);
+    if (savedCredits > 0) setSingleCredits(savedCredits);
+
+    const params = new URLSearchParams(window.location.search);
+    const paymentId = params.get("payment_id");
+    const subscriptionId = params.get("subscription_id");
+    const txId = paymentId || subscriptionId;
+
+    if (!txId) return;
+
+    window.history.replaceState({}, "", window.location.pathname);
+
+    const redeemedRaw = localStorage.getItem("oss_redeemed_ids") || "[]";
+    const redeemedIds: string[] = JSON.parse(redeemedRaw);
+    if (redeemedIds.includes(txId)) return;
+
+    const query = paymentId
+      ? `payment_id=${encodeURIComponent(paymentId)}`
+      : `subscription_id=${encodeURIComponent(subscriptionId!)}`;
+
+    fetch(`/api/verify-payment?${query}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.verified) return;
+
+        const updatedIds = [...redeemedIds, txId];
+        localStorage.setItem("oss_redeemed_ids", JSON.stringify(updatedIds));
+
+        if (data.tier === "pro") {
+          localStorage.setItem("oss_pro_unlocked", "true");
+          setIsUnlimitedPro(true);
+        } else {
+          const current = parseInt(localStorage.getItem("oss_single_credits") || "0", 10);
+          const next = current + 1;
+          localStorage.setItem("oss_single_credits", String(next));
+          setSingleCredits(next);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const simulateUnlock = (tier: "single" | "pro") => {
@@ -167,10 +182,8 @@ export default function OwnerStatementStudio() {
 
   const handleExportClick = () => {
     if (isUnlimitedPro) {
-      setPrintWatermarked(false);
       setTimeout(() => window.print(), 100);
     } else if (singleCredits > 0) {
-      setPrintWatermarked(false);
       setTimeout(() => {
         window.print();
         const remaining = Math.max(0, singleCredits - 1);
@@ -183,7 +196,6 @@ export default function OwnerStatementStudio() {
   };
 
   const handleWatermarkedDownload = () => {
-    setPrintWatermarked(true);
     setShowPaywallModal(false);
     setTimeout(() => {
       window.print();
@@ -671,9 +683,9 @@ export default function OwnerStatementStudio() {
 
         <div className="lg:col-span-7">
           <div className="print-area relative overflow-hidden bg-white rounded-xl border border-slate-200 shadow-lg p-8 md:p-10">
-            {!hasCleanExportAccess && printWatermarked && (
-              <div className="hidden print:flex pointer-events-none fixed inset-0 items-center justify-center z-50">
-                <p className="text-4xl font-extrabold uppercase tracking-widest text-slate-400/35 -rotate-30 border-4 border-slate-400/35 px-6 py-3 rounded-xl">
+            {!hasCleanExportAccess && (
+              <div className="pointer-events-none select-none fixed inset-0 flex items-center justify-center z-50">
+                <p className="text-3xl md:text-4xl font-extrabold uppercase tracking-widest text-slate-400/30 -rotate-30 border-4 border-slate-400/30 px-6 py-3 rounded-xl">
                   DRAFT PREVIEW - OWNER STATEMENT STUDIO
                 </p>
               </div>
@@ -809,6 +821,7 @@ export default function OwnerStatementStudio() {
           </div>
         </div>
       </main>
+
       {showPaywallModal && (
         <div className="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 relative">
