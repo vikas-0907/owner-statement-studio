@@ -683,13 +683,13 @@ export default function OwnerStatementStudio() {
 
         <div className="lg:col-span-7">
           <div className="print-area relative overflow-hidden bg-white rounded-xl border border-slate-200 shadow-lg p-8 md:p-10">
-            {!hasCleanExportAccess && (
-              <div className="pointer-events-none select-none fixed inset-0 flex items-center justify-center z-50">
-                <p className="text-3xl md:text-4xl font-extrabold uppercase tracking-widest text-slate-400/30 -rotate-30 border-4 border-slate-400/30 px-6 py-3 rounded-xl">
-                  DRAFT PREVIEW - OWNER STATEMENT STUDIO
-                </p>
-              </div>
-            )}
+          {!hasCleanExportAccess && (
+  <div className="hidden print:flex pointer-events-none select-none fixed inset-0 items-center justify-center z-50">
+    <p className="text-3xl md:text-4xl font-extrabold uppercase tracking-widest text-slate-400/35 -rotate-30 border-4 border-slate-400/35 px-6 py-3 rounded-xl">
+      FREE DRAFT PREVIEW - OWNER STATEMENT STUDIO
+    </p>
+  </div>
+)}
 
             <div className="flex flex-wrap justify-between items-start pb-6 border-b-2" style={{ borderColor: accentColor }}>
               <div className="flex items-start gap-3.5">
