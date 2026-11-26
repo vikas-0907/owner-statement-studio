@@ -47,14 +47,13 @@ interface ColumnMapping {
   platformFee: string;
 }
 
-// Replace these three URLs with your real Lemon Squeezy / Dodo Payments checkout links
-// Set each checkout's Success Redirect URL to: https://yourdomain.com/?unlocked=pro_2026
+// PASTE YOUR 3 RAW DODO PAYMENTS CHECKOUT URLS HERE:
 const SINGLE_PASS_CHECKOUT_URL =
-"https://checkout.dodopayments.com/buy/pdt_0NslK7g8MJ8p387GrWNMZ?quantity=1&redirect_url=https://owner-statement-studio-lyart.vercel.app%2F%3Funlocked%3Dsingle_2026";
+  "https://test.checkout.dodopayments.com/buy/pdt_0NsmNPqCSRRSTda6Wo1Ms?quantity=1&redirect_url=https://owner-statement-studio-lyart.vercel.app%2F%3Funlocked%3Dsingle_2026";
 const MONTHLY_PRO_CHECKOUT_URL =
-"https://checkout.dodopayments.com/buy/pdt_0NslKixVcbBaw6p7G144b?quantity=1&redirect_url=https://owner-statement-studio-lyart.vercel.app%2F%3Funlocked%3Dpro_2026";
+  "https://checkout.dodopayments.com/buy/pdt_0NslKixVcbBaw6p7G144b";
 const ANNUAL_PRO_CHECKOUT_URL =
-"https://checkout.dodopayments.com/buy/pdt_0NslL4CYAFH6Yxx1QR0AT?quantity=1&redirect_url=https://owner-statement-studio-lyart.vercel.app%2F%3Funlocked%3Dpro_2026";
+  "https://checkout.dodopayments.com/buy/pdt_0NslL4CYAFH6Yxx1QR0AT";
 
 const SAMPLE_BOOKINGS: BookingRow[] = [
   {
@@ -113,7 +112,6 @@ const CURRENCIES = [
 ];
 
 export default function OwnerStatementStudio() {
-  // Branding & Property Info
   const [companyName, setCompanyName] = useState("Apex Stays Management");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [propertyName, setPropertyName] = useState("Villa Sol — Lakeview Loft");
@@ -122,38 +120,70 @@ export default function OwnerStatementStudio() {
   const [accentColor, setAccentColor] = useState("#1e3a8a");
   const [currency, setCurrency] = useState("USD");
 
-  // Paywall & Export State
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [isUnlimitedPro, setIsUnlimitedPro] = useState<boolean>(false);
+  const [singleCredits, setSingleCredits] = useState<number>(0);
   const [showPaywallModal, setShowPaywallModal] = useState<boolean>(false);
   const [billingCycle, setBillingCycle] = useState<"annual" | "monthly">(
     "annual"
   );
   const [printWatermarked, setPrintWatermarked] = useState<boolean>(false);
 
-  // Check URL redirect (?unlocked=pro_2026) or saved localStorage unlock on mount
+  const hasCleanExportAccess = isUnlimitedPro || singleCredits > 0;
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("unlocked") === "pro_2026") {
+    const unlockedTier = params.get("unlocked");
+    const paymentStatus = params.get("status");
+    const hasValidPayment =
+      paymentStatus === "succeeded" ||
+      paymentStatus === "active" ||
+      params.has("payment_id") ||
+      params.has("subscription_id");
+
+    if (unlockedTier === "pro_2026" && hasValidPayment) {
       localStorage.setItem("oss_pro_unlocked", "true");
-      setIsUnlocked(true);
+      setIsUnlimitedPro(true);
       window.history.replaceState({}, "", window.location.pathname);
-    } else if (localStorage.getItem("oss_pro_unlocked") === "true") {
-      setIsUnlocked(true);
+    } else if (unlockedTier === "single_2026" && hasValidPayment) {
+      const current = parseInt(
+        localStorage.getItem("oss_single_credits") || "0",
+        10
+      );
+      const updated = current + 1;
+      localStorage.setItem("oss_single_credits", String(updated));
+      setSingleCredits(updated);
+      window.history.replaceState({}, "", window.location.pathname);
+    } else {
+      if (localStorage.getItem("oss_pro_unlocked") === "true") {
+        setIsUnlimitedPro(true);
+      }
+      const savedCredits = parseInt(
+        localStorage.getItem("oss_single_credits") || "0",
+        10
+      );
+      if (savedCredits > 0) setSingleCredits(savedCredits);
     }
   }, []);
 
-  const unlockLocally = () => {
-    localStorage.setItem("oss_pro_unlocked", "true");
-    setIsUnlocked(true);
+  const simulateUnlock = (tier: "single" | "pro") => {
+    if (tier === "pro") {
+      localStorage.setItem("oss_pro_unlocked", "true");
+      setIsUnlimitedPro(true);
+    } else {
+      const next = singleCredits + 1;
+      localStorage.setItem("oss_single_credits", String(next));
+      setSingleCredits(next);
+    }
     setShowPaywallModal(false);
   };
 
   const resetLockLocally = () => {
     localStorage.removeItem("oss_pro_unlocked");
-    setIsUnlocked(false);
+    localStorage.removeItem("oss_single_credits");
+    setIsUnlimitedPro(false);
+    setSingleCredits(0);
   };
 
-  // Raw CSV State for Column Mapping
   const [rawCsvRows, setRawCsvRows] = useState<Record<string, any>[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<ColumnMapping>({
@@ -165,14 +195,12 @@ export default function OwnerStatementStudio() {
     platformFee: "",
   });
 
-  // Financial Rules
   const [commissionRate, setCommissionRate] = useState<number>(20);
   const [deductCleaningBeforeSplit, setDeductCleaningBeforeSplit] =
     useState<boolean>(true);
   const [reconcile155FeeOnCleaning, setReconcile155FeeOnCleaning] =
     useState<boolean>(true);
 
-  // Manual Expenses & Notes
   const [expenses, setExpenses] = useState<ExpenseItem[]>([
     {
       id: "e1",
@@ -187,11 +215,18 @@ export default function OwnerStatementStudio() {
     "Strong October performance with 18 booked nights and two 5-star guest reviews mentioning spotless cleanliness. Scheduled preventative HVAC check ahead of winter bookings."
   );
 
-  // Trigger Print Flow
   const handleExportClick = () => {
-    if (isUnlocked) {
+    if (isUnlimitedPro) {
       setPrintWatermarked(false);
       setTimeout(() => window.print(), 100);
+    } else if (singleCredits > 0) {
+      setPrintWatermarked(false);
+      setTimeout(() => {
+        window.print();
+        const remaining = Math.max(0, singleCredits - 1);
+        localStorage.setItem("oss_single_credits", String(remaining));
+        setSingleCredits(remaining);
+      }, 100);
     } else {
       setShowPaywallModal(true);
     }
@@ -205,7 +240,6 @@ export default function OwnerStatementStudio() {
     }, 150);
   };
 
-  // Logo Upload Handler
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -216,7 +250,6 @@ export default function OwnerStatementStudio() {
     reader.readAsDataURL(file);
   };
 
-  // Download Sample CSV for Instant User Testing
   const downloadSampleCsv = () => {
     const csvContent = [
       "Start date,Nights,Guest,Gross earnings,Cleaning fee,Host service fee",
@@ -236,7 +269,6 @@ export default function OwnerStatementStudio() {
     document.body.removeChild(link);
   };
 
-  // CSV Upload Handler
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -273,7 +305,6 @@ export default function OwnerStatementStudio() {
     });
   };
 
-  // Convert Raw CSV + Mapping into Clean Booking Rows
   const bookings: BookingRow[] = useMemo(() => {
     if (rawCsvRows.length === 0) return SAMPLE_BOOKINGS;
 
@@ -300,7 +331,6 @@ export default function OwnerStatementStudio() {
       .filter((b) => b.grossAmount > 0);
   }, [rawCsvRows, mapping]);
 
-  // Financial Calculations
   const financials = useMemo(() => {
     const totalNights = bookings.reduce((sum, b) => sum + b.nights, 0);
     const grossRevenue = bookings.reduce((sum, b) => sum + b.grossAmount, 0);
@@ -366,7 +396,6 @@ export default function OwnerStatementStudio() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      {/* Top Navbar */}
       <header className="no-print bg-white border-b border-slate-200 px-6 py-3.5 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
@@ -381,9 +410,14 @@ export default function OwnerStatementStudio() {
                 <h1 className="font-bold text-lg leading-tight">
                   Owner Statement Studio
                 </h1>
-                {isUnlocked && (
+                {isUnlimitedPro && (
                   <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                    Pro Unlocked
+                    Pro Unlimited
+                  </span>
+                )}
+                {!isUnlimitedPro && singleCredits > 0 && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                    {singleCredits} Clean Export Credit
                   </span>
                 )}
               </div>
@@ -394,7 +428,7 @@ export default function OwnerStatementStudio() {
           </div>
 
           <div className="flex items-center gap-3">
-            {isUnlocked && (
+            {hasCleanExportAccess && (
               <button
                 onClick={resetLockLocally}
                 className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
@@ -415,18 +449,17 @@ export default function OwnerStatementStudio() {
               onClick={handleExportClick}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-4 py-2 rounded-lg shadow-sm transition"
             >
-              {isUnlocked ? (
+              {hasCleanExportAccess ? (
                 <Printer className="w-4 h-4" />
               ) : (
                 <Lock className="w-4 h-4" />
               )}
-              {isUnlocked ? "Download Clean PDF" : "Export Owner PDF"}
+              {hasCleanExportAccess ? "Download Clean PDF" : "Export Owner PDF"}
             </button>
           </div>
         </div>
       </header>
 
-      {/* Conversion Hero Banner (Hidden when printing) */}
       <section className="no-print bg-slate-900 text-white border-b border-slate-800 px-6 py-5">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -454,11 +487,8 @@ export default function OwnerStatementStudio() {
         </div>
       </section>
 
-      {/* Main Split Workspace */}
       <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* LEFT COLUMN: Controls & Inputs */}
         <div className="no-print lg:col-span-5 space-y-6">
-          {/* 1. CSV Upload & Column Mapper */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -494,7 +524,6 @@ export default function OwnerStatementStudio() {
               />
             </label>
 
-            {/* Interactive Column Mapper */}
             {csvHeaders.length > 0 && (
               <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-2.5">
                 <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
@@ -537,13 +566,11 @@ export default function OwnerStatementStudio() {
             )}
           </div>
 
-          {/* 2. Statement Branding & Logo */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm uppercase tracking-wider text-slate-500">
               2. Statement Branding
             </h2>
 
-            {/* Logo Uploader */}
             <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-lg border border-slate-200">
               <div className="flex items-center gap-2.5">
                 {logoUrl ? (
@@ -587,7 +614,6 @@ export default function OwnerStatementStudio() {
               </div>
             </div>
 
-            {/* Brand Color Swatches */}
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1.5">
                 Brand Accent Color
@@ -680,7 +706,6 @@ export default function OwnerStatementStudio() {
             </div>
           </div>
 
-          {/* 3. Commission & 2026 15.5% Fee Reconciliation */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-500" />
@@ -726,7 +751,6 @@ export default function OwnerStatementStudio() {
             </label>
           </div>
 
-          {/* 4. Maintenance & Expenses */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm uppercase tracking-wider text-slate-500">
               4. Maintenance & Reimbursements
@@ -777,7 +801,6 @@ export default function OwnerStatementStudio() {
             </div>
           </div>
 
-          {/* 5. Owner Note */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
             <h2 className="font-semibold text-sm uppercase tracking-wider text-slate-500">
               5. Monthly Manager Note
@@ -791,11 +814,9 @@ export default function OwnerStatementStudio() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Live Executive Owner Report Preview */}
         <div className="lg:col-span-7">
           <div className="print-area relative overflow-hidden bg-white rounded-xl border border-slate-200 shadow-lg p-8 md:p-10">
-            {/* Diagonal Watermark (Only prints when user chooses Free Watermarked Download) */}
-            {!isUnlocked && printWatermarked && (
+            {!hasCleanExportAccess && printWatermarked && (
               <div className="hidden print:flex pointer-events-none fixed inset-0 items-center justify-center z-50">
                 <p className="text-4xl font-extrabold uppercase tracking-widest text-slate-400/35 -rotate-30 border-4 border-slate-400/35 px-6 py-3 rounded-xl">
                   DRAFT PREVIEW • OWNER STATEMENT STUDIO
@@ -803,7 +824,6 @@ export default function OwnerStatementStudio() {
               </div>
             )}
 
-            {/* Report Header */}
             <div
               className="flex flex-wrap justify-between items-start pb-6 border-b-2"
               style={{ borderColor: accentColor }}
@@ -839,7 +859,6 @@ export default function OwnerStatementStudio() {
               </div>
             </div>
 
-            {/* Executive KPI Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-6">
               <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200">
                 <p className="text-[11px] uppercase tracking-wider text-slate-500">
@@ -884,7 +903,6 @@ export default function OwnerStatementStudio() {
               </div>
             </div>
 
-            {/* Manager Commentary */}
             {ownerNotes && (
               <div
                 className="bg-slate-50 border-l-4 p-4 rounded-r-lg mb-6"
@@ -899,7 +917,6 @@ export default function OwnerStatementStudio() {
               </div>
             )}
 
-            {/* Reservation Breakdown Table */}
             <div className="mb-6">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2.5">
                 Reservation Breakdown
@@ -948,7 +965,6 @@ export default function OwnerStatementStudio() {
               </div>
             </div>
 
-            {/* Payout Reconciliation Summary */}
             <div className="border-t border-slate-200 pt-4 space-y-2 text-xs">
               <div className="flex justify-between text-slate-600">
                 <span>Gross Reservation Revenue</span>
@@ -982,190 +998,4 @@ export default function OwnerStatementStudio() {
                 <span>-{fmt(financials.managementFee)}</span>
               </div>
               {expenses.map((exp) => (
-                <div key={exp.id} className="flex justify-between text-slate-600">
-                  <span>Less: {exp.description}</span>
-                  <span>-{fmt(exp.amount)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between text-base font-bold text-slate-900 pt-3 border-t border-slate-300">
-                <span>Total Net Owner Disbursement</span>
-                <span>{fmt(financials.netOwnerPayout)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* PAYWALL / EXPORT MODAL */}
-      {showPaywallModal && (
-        <div className="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 relative">
-            <button
-              onClick={() => setShowPaywallModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
-                Ready to Send to {ownerName}
-              </span>
-              <h3 className="text-2xl font-bold text-slate-900 mt-2">
-                Export Your Owner Statement
-              </h3>
-              <p className="text-sm text-slate-500 mt-1">
-                Download a free watermarked preview to verify print quality, or
-                unlock clean, unbranded PDFs ready for your property owners.
-              </p>
-            </div>
-
-            {/* Billing Cycle Switch (Monthly vs Annual) */}
-            <div className="flex items-center justify-center gap-2 bg-slate-100 p-1 rounded-lg mb-5 w-fit mx-auto">
-              <button
-                type="button"
-                onClick={() => setBillingCycle("monthly")}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-md transition ${
-                  billingCycle === "monthly"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => setBillingCycle("annual")}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
-                  billingCycle === "annual"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Annual
-                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
-                  Save $101
-                </span>
-              </button>
-            </div>
-
-            {/* Pricing Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-              {/* Single Pass ($9) */}
-              <div className="border-2 border-slate-200 hover:border-slate-900 rounded-xl p-4 flex flex-col justify-between transition">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Single Report Pass
-                  </p>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-3xl font-extrabold text-slate-900">
-                      $9
-                    </span>
-                    <span className="text-xs text-slate-500">one-time</span>
-                  </div>
-                  <ul className="mt-3 space-y-1.5 text-xs text-slate-600">
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      Remove draft watermark
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      Custom logo & brand colors
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      No recurring subscription
-                    </li>
-                  </ul>
-                </div>
-                <a
-                  href={SINGLE_PASS_CHECKOUT_URL}
-                  onClick={(e) => {
-                    if (SINGLE_PASS_CHECKOUT_URL.startsWith("#")) {
-                      e.preventDefault();
-                      unlockLocally();
-                    }
-                  }}
-                  className="mt-4 block text-center bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs py-2.5 rounded-lg transition"
-                >
-                  Unlock Clean PDF ($9)
-                </a>
-              </div>
-
-              {/* Unlimited Co-Host Pro ($25/mo or $199/yr) */}
-              <div className="border-2 border-emerald-600 bg-emerald-50/40 rounded-xl p-4 flex flex-col justify-between relative">
-                <span className="absolute -top-2.5 right-3 bg-emerald-600 text-white text-[10px] font-bold uppercase px-2 py-0.5 rounded-full">
-                  Best for 3+ Doors
-                </span>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-                    Unlimited Co-Host Pro
-                  </p>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-3xl font-extrabold text-slate-900">
-                      {billingCycle === "annual" ? "$199" : "$25"}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      {billingCycle === "annual" ? "/ year" : "/ month"}
-                    </span>
-                  </div>
-                  {billingCycle === "annual" && (
-                    <p className="text-[11px] font-medium text-emerald-700 mt-0.5">
-                      Equals $16.58/mo (4 months free)
-                    </p>
-                  )}
-                  <ul className="mt-3 space-y-1.5 text-xs text-slate-700">
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      Unlimited properties & PDFs
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      15.5% fee true-up engine
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      Cancel anytime in 1 click
-                    </li>
-                  </ul>
-                </div>
-                <a
-                  href={
-                    billingCycle === "annual"
-                      ? ANNUAL_PRO_CHECKOUT_URL
-                      : MONTHLY_PRO_CHECKOUT_URL
-                  }
-                  onClick={(e) => {
-                    const url =
-                      billingCycle === "annual"
-                        ? ANNUAL_PRO_CHECKOUT_URL
-                        : MONTHLY_PRO_CHECKOUT_URL;
-                    if (url.startsWith("#")) {
-                      e.preventDefault();
-                      unlockLocally();
-                    }
-                  }}
-                  className="mt-4 block text-center bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs py-2.5 rounded-lg transition"
-                >
-                  {billingCycle === "annual"
-                    ? "Go Unlimited ($199/yr)"
-                    : "Go Unlimited ($25/mo)"}
-                </a>
-              </div>
-            </div>
-
-            {/* Free Watermarked Option */}
-            <div className="border-t border-slate-200 pt-4 text-center sm:text-left">
-              <button
-                onClick={handleWatermarkedDownload}
-                className="text-xs font-medium text-slate-600 hover:text-slate-900 underline"
-              >
-                Download free preview with watermark instead →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                <div key={exp.id} className="flex justify-between text-slate-600
